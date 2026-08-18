@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spec@1",
+  "id": "SPEC-PRISM-003-CLI",
+  "purpose": "Defines the evaluation runner CLI, declarative matrix executor, OpenTelemetry (OTel) and Parquet exporters, and GitHub Actions CI quality-gating workflows for Prism.",
+  "scope": "Covers crates/prism-cli: prism test, prism bench, prism matrix, prism record, prism.matrix.toml parser, OTel OTLP v1.28+ exporter, Apache Parquet sink, and GitHub Step Summary rendering.",
+  "non_goals": [
+    "Interactive GUI or web server rendering (CLI-first architecture)."
+  ],
+  "api_surface": [
+    {
+      "name": "Cli",
+      "signature": "pub struct Cli { pub command: Commands, pub json: bool, pub offline: bool, pub github_summary: bool }",
+      "description": "Top-level command line argument parser for prism with test, bench, matrix, and record subcommands.",
+      "error_conditions": [
+        "Exits with code 2 on invalid command syntax"
+      ]
+    },
+    {
+      "name": "MatrixRunner",
+      "signature": "pub struct MatrixRunner; impl MatrixRunner { pub async fn run_matrix(path: &Path) -> Result<MatrixComparisonReport, CliError>; }",
+      "description": "Executes Cartesian evaluation experiments across models, prompts, and harnesses with rate-limited concurrency.",
+      "error_conditions": []
+    },
+    {
+      "name": "TelemetryExporter",
+      "signature": "pub trait TelemetryExporter: Send + Sync { fn name(&self) -> &'static str; fn export_trial(&self, result: &MatrixResultDatum, transcript: &CanonicalTranscript) -> Result<(), ExportError>; fn flush(&self) -> Result<(), ExportError>; }",
+      "description": "Pluggable telemetry interface implemented by OtelOtlpExporter, ParquetExporter, and GitHubStepSummaryExporter.",
+      "error_conditions": []
+    },
+    {
+      "name": "render_github_summary",
+      "signature": "pub fn render_github_summary(reports: &[serde_json::Value]) -> String",
+      "description": "Generates a clean, scannable GitHub Step Summary Markdown report for CI runs with transparent API token cost labeling.",
+      "error_conditions": []
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "CRIT-PRISM-140",
+      "criterion": "WHEN prism test is executed with --offline, THE SYSTEM SHALL run all matching test suites against local fixtures in under 50 milliseconds with $0.00 network spend.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-141",
+      "criterion": "WHEN all task assertions pass in prism test, THE SYSTEM SHALL exit with status code 0.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-142",
+      "criterion": "IF any task assertion fails in prism test, THE SYSTEM SHALL exit with status code 1 and render a miette diagnostic card detailing the failed assertion.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-143",
+      "criterion": "WHEN --github-summary is passed in GitHub Actions, THE SYSTEM SHALL append the formatted evaluation scorecard Markdown directly to the file at GITHUB_STEP_SUMMARY.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-144",
+      "criterion": "WHEN prism bench --skill=<SKILL> is invoked, THE SYSTEM SHALL execute paired trials against baseline models and output the delta in pass rate, token cost, and turns.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-145",
+      "criterion": "WHEN prism matrix run <FILE.toml> is invoked, THE SYSTEM SHALL execute the Cartesian matrix across declared models and harnesses, computing data-vs-data differentials.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-146",
+      "criterion": "WHEN reporting financial economics, THE SYSTEM SHALL explicitly label commercial API runs as 'API Token Cost ($ USD)' and local/on-prem runs as '$0.00 (API Token Fees) / Self-Hosted'.",
+      "is_error_case": false,
+      "judgment_call": false
+    }
+  ],
+  "linked_requirement": "REQ-PRISM-001",
+  "linked_research": "RES-PRISM-001",
+  "spec_file_path": "specs/SPEC-PRISM-003-CLI.json",
+  "reasoning": "Defines the evaluation CLI runner, declarative matrix execution, pluggable OTel/Parquet exporters, and transparent economic reporting."
+}

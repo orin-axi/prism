@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spec@1",
+  "id": "SPEC-PRISM-002-GRADER",
+  "purpose": "Defines the 4 decoupled evaluation grader engines and the multi-dimensional matrix evaluation and differential comparison engine for Prism.",
+  "scope": "Covers crates/prism-grader: Grader trait, AssertionResult, RedGreenGrader, TrajectoryGrader, CircuitBreakerGrader, CalibratedJudge, MatrixResultDatum, MetricDifferential, and eval-report@1 schema formatting.",
+  "non_goals": [
+    "Subprocess spawning or API networking (delegated to prism-core drivers).",
+    "CLI rendering or command dispatch (delegated to prism-cli)."
+  ],
+  "api_surface": [
+    {
+      "name": "Grader",
+      "signature": "pub trait Grader: Send + Sync { fn name(&self) -> &'static str; fn evaluate(&self, spec: &TaskSpec, transcript: &CanonicalTranscript) -> Result<AssertionResult, EvaluationError>; }",
+      "description": "Assertion evaluation interface implemented by the four grading engines.",
+      "error_conditions": [
+        "EvaluationError::TaskRunnerFailed if test suite fails execution",
+        "EvaluationError::AssertionFailed if an assertion is violated"
+      ]
+    },
+    {
+      "name": "RedGreenGrader",
+      "signature": "pub struct RedGreenGrader; impl RedGreenGrader { pub async fn verify_transition(&self, sandbox: &WorkspaceSandbox) -> Result<AssertionResult, EvaluationError>; }",
+      "description": "Verifies that an injected bug or failing test caused the suite to FAIL initially (Red Pass) and that the agent's code made it PASS with zero regressions (Green Pass).",
+      "error_conditions": [
+        "Fails if initial state passed or final state failed"
+      ]
+    },
+    {
+      "name": "TrajectoryGrader",
+      "signature": "pub struct TrajectoryGrader { pub min_cache_hit_ratio: f32, pub max_circular_loops: usize }; impl Grader for TrajectoryGrader { ... }",
+      "description": "Grades the prompt cache hit percentage (threshold >= 90.0%) and asserts zero Tarjan SCC circular loops.",
+      "error_conditions": []
+    },
+    {
+      "name": "CircuitBreakerGrader",
+      "signature": "pub struct CircuitBreakerGrader { pub max_allowed_rounds: usize }; impl Grader for CircuitBreakerGrader { ... }",
+      "description": "Asserts that multi-agent consensus iterations between reviewer pairs do not exceed 2 rounds.",
+      "error_conditions": []
+    },
+    {
+      "name": "MatrixResultDatum",
+      "signature": "pub struct MatrixResultDatum { pub config_id: CompactString, pub model_name: CompactString, pub harness_name: CompactString, pub prompt_or_skill: CompactString, pub pass_rate: f64, pub cache_hit_ratio: f64, pub total_cost_usd: f64, pub turn_count: usize, pub turn_latency_p50_ms: u64, pub turn_latency_p95_ms: u64, pub total_wall_time_ms: u64, pub input_tokens: u64, pub output_tokens: u64, pub quality_score: f64, pub circular_loops_detected: usize }; impl MatrixResultDatum { pub fn from_execution(...) -> Self; }",
+      "description": "Comprehensive 8-dimensional evaluation metric record for a cell in the experiment matrix.",
+      "error_conditions": []
+    },
+    {
+      "name": "MetricDifferential",
+      "signature": "pub struct MetricDifferential { pub candidate_id: CompactString, pub baseline_id: CompactString, pub delta_pass_rate_pct: f64, pub delta_cost_pct: f64, pub delta_turns_pct: f64, pub delta_cache_hit_pct: f64, pub delta_wall_time_pct: f64, pub delta_quality_pct: f64 }; impl MetricDifferential { pub fn compute(candidate: &MatrixResultDatum, baseline: &MatrixResultDatum) -> Self; }",
+      "description": "Data-vs-data differential calculating exact metric deltas between a candidate variant and a baseline control.",
+      "error_conditions": []
+    },
+    {
+      "name": "build_eval_report",
+      "signature": "pub fn build_eval_report(eval_id: &str, task: &TaskSpec, transcript: &CanonicalTranscript, assertions: Vec<AssertionResult>) -> serde_json::Value",
+      "description": "Assembles the final scorecard into a JSON object strictly conforming to eval-report@1 schema.",
+      "error_conditions": []
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "CRIT-PRISM-120",
+      "criterion": "WHEN RedGreenGrader evaluates a state transition, THE SYSTEM SHALL assert that the test runner fails before the patch and succeeds after the patch.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-121",
+      "criterion": "IF the test suite passes prior to patch application in a RedGreenGrader trial, THE SYSTEM SHALL mark the Red-to-Green assertion as FAILED with an InvalidRedState message.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-122",
+      "criterion": "WHEN TrajectoryGrader evaluates a transcript with a prompt cache hit ratio below min_cache_hit_ratio (default 0.90), THE SYSTEM SHALL mark the Cache Health assertion as FAILED.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-123",
+      "criterion": "WHEN TrajectoryGrader observes a CircularLoopAnomaly in the transcript, THE SYSTEM SHALL mark the Trajectory Integrity assertion as FAILED.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-124",
+      "criterion": "WHEN CircuitBreakerGrader evaluates review iterations between Drafter and Auditor, THE SYSTEM SHALL assert that total rounds are <= 2.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-125",
+      "criterion": "WHEN MatrixResultDatum::from_execution is invoked, THE SYSTEM SHALL calculate all 8 dimensions (Pass rate, cache hit %, cost, turns, latency p50/p95, wall time, input/output tokens, and composite quality score).",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-126",
+      "criterion": "WHEN MetricDifferential::compute is invoked, THE SYSTEM SHALL compute exact empirical percentage deltas between candidate and baseline.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-127",
+      "criterion": "WHEN build_eval_report generates output, THE SYSTEM SHALL validate that the resulting JSON payload validates 100% against the eval-report@1 JSON Schema.",
+      "is_error_case": false,
+      "judgment_call": false
+    }
+  ],
+  "linked_requirement": "REQ-PRISM-001",
+  "linked_research": "RES-PRISM-001",
+  "spec_file_path": "specs/SPEC-PRISM-002-GRADER.json",
+  "reasoning": "Specifies the 4 decoupled evaluation grader engines, the 8-dimensional matrix metrics, and data-vs-data differential calculations."
+}

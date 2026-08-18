@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spec@1",
+  "id": "SPEC-PRISM-001-CORE",
+  "purpose": "Defines the evaluation task models, execution driver interfaces, pluggable harness adapters, and hermetic CoW sandbox environments for Prism.",
+  "scope": "Covers crates/prism-core: TaskSpec, VcrCassette, ExecutionDriver trait, HarnessAdapter trait, ClaudeCliDriver, AgyCliDriver, OpenAiCompatibleDriver, OpenCodeDriver, VcrReplayDriver, WorkspaceSandbox with Reflink/APFS CoW and POSIX setpgid process group reaping.",
+  "non_goals": [
+    "Assertion evaluation logic or grading rules (delegated to prism-grader).",
+    "CLI argument parsing or terminal table rendering (delegated to prism-cli)."
+  ],
+  "api_surface": [
+    {
+      "name": "TaskSpec",
+      "signature": "pub struct TaskSpec { pub id: CompactString, pub skill: CompactString, pub input_prompt: String, pub fixture_repo: Option<PathBuf>, pub expected_assertions: Vec<CompactString>, pub max_turns: usize, pub timeout_seconds: u64 }",
+      "description": "Evaluation task definition containing the input prompt, private fixture repository path, expected assertions, and turn limits.",
+      "error_conditions": []
+    },
+    {
+      "name": "ExecutionDriver",
+      "signature": "pub trait ExecutionDriver: Send + Sync { fn name(&self) -> &'static str; fn is_available(&self) -> bool; async fn execute(&self, task: &TaskSpec, sandbox_dir: &std::path::Path) -> Result<CanonicalTranscript, PrismCoreError>; }",
+      "description": "Pluggable driver interface implemented by ClaudeCliDriver, AgyCliDriver, OpenAiCompatibleDriver, OpenCodeDriver, and VcrReplayDriver.",
+      "error_conditions": [
+        "PrismCoreError::DriverUnavailable if required binary or API key is absent",
+        "PrismCoreError::CassetteNotFound if VCR cassette does not exist",
+        "PrismCoreError::ProcessFailed if subprocess execution exits with error"
+      ]
+    },
+    {
+      "name": "OpenAiCompatibleDriver",
+      "signature": "pub struct OpenAiCompatibleDriver { pub base_url: CompactString, pub model_name: CompactString, pub api_key_env: CompactString }; impl OpenAiCompatibleDriver { pub fn qwen_coder(model: &str) -> Self; pub fn kimi(model: &str) -> Self; pub fn glm(model: &str) -> Self; pub fn gemini(model: &str) -> Self; }",
+      "description": "Generic streaming driver for any OpenAI-compatible API or local server (Qwen, Kimi, GLM, Gemini, DeepSeek, vLLM, Ollama, LM Studio).",
+      "error_conditions": []
+    },
+    {
+      "name": "OpenCodeDriver",
+      "signature": "pub struct OpenCodeDriver { pub binary_path: CompactString, pub model_name: CompactString }",
+      "description": "Headless CLI driver for executing tasks inside OpenCode / OpenHands environments.",
+      "error_conditions": []
+    },
+    {
+      "name": "WorkspaceSandbox",
+      "signature": "pub struct WorkspaceSandbox { _temp_dir: tempfile::TempDir, pub path: std::path::PathBuf }; impl WorkspaceSandbox { pub fn new(fixture_path: &std::path::Path) -> Result<Self, std::io::Error>; pub async fn git_checkout(&self, commit_sha: &str) -> Result<(), std::io::Error>; pub async fn apply_patch(&self, patch: &str) -> Result<(), std::io::Error>; pub async fn run_test_suite(&self) -> Result<bool, std::io::Error>; }",
+      "description": "Hermetic file sandbox creating isolated /tmp/ workspace clones with Reflink/APFS Copy-on-Write cloning and POSIX process group tree reaping on timeout.",
+      "error_conditions": [
+        "std::io::Error if disk space is exhausted or file copying fails"
+      ]
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "CRIT-PRISM-100",
+      "criterion": "WHEN WorkspaceSandbox is initialized with a fixture path, THE SYSTEM SHALL clone the fixture files into a temporary /tmp/ directory using Reflink/APFS Copy-on-Write and initialize a clean git repository.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-101",
+      "criterion": "WHEN WorkspaceSandbox drops out of scope or times out, THE SYSTEM SHALL terminate all child processes in the POSIX process group (setpgid) and delete the temporary directory automatically.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-102",
+      "criterion": "WHEN VcrReplayDriver executes with matching cassette, THE SYSTEM SHALL deserialize the CanonicalTranscript and return in under 5 milliseconds with $0.00 network spend.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-103",
+      "criterion": "WHEN ClaudeCliDriver executes, THE SYSTEM SHALL invoke the local claude CLI using -p and --output-format=json in non-interactive mode.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-104",
+      "criterion": "WHEN OpenAiCompatibleDriver executes, THE SYSTEM SHALL dispatch standard /v1/chat/completions payload with Bearer authentication and parse response tokens via CodexAdapter.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-105",
+      "criterion": "WHEN OpenCodeDriver executes, THE SYSTEM SHALL invoke the opencode binary with run --task and --json flags.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-106",
+      "criterion": "IF an offline task cannot locate a matching cassette file, THE SYSTEM SHALL return PrismCoreError::CassetteNotFound with the expected cassette path.",
+      "is_error_case": true,
+      "judgment_call": false
+    }
+  ],
+  "linked_requirement": "REQ-PRISM-001",
+  "linked_research": "RES-PRISM-001",
+  "spec_file_path": "specs/SPEC-PRISM-001-CORE.json",
+  "reasoning": "Establishes evaluation task structures, multi-model execution drivers (Claude, AGY, OpenAI-compatible, OpenCode), and hermetic CoW sandboxing."
+}

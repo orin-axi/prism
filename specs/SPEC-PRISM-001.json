@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spec@1",
+  "id": "SPEC-PRISM-001",
+  "purpose": "Defines the canonical architecture, traits, domain models, mathematical token accounting formulas, 6-dimensional trajectory evaluation metrics, single-pass accumulators, 4-engine grader suite, dual-mode execution harness, and CLI interfaces for the Prism evaluation and quality gating platform and the Lumen foundational telemetry engine.",
+  "scope": "Covers lumen-model (Canonical IR, Turn, ToolIntent, TokenEconomics), lumen-session (SIMD parsers, ClaudeCode, AGY, Codex adapters), lumen-analysis (22 single-pass accumulators), lumen-pattern (petgraph Trajectory DAG & Tarjan SCC cycle detector), prism-core (TaskSpec, VCR Cassettes, Scorecard, WorkspaceSandbox), prism-grader (Deterministic State, Trajectory, Multi-Agent Circuit, Opus Calibrated Judge), prism-cli, lumen-cli, and plugins/prism integration.",
+  "non_goals": [
+    "Mandatory background SQLite daemon dependency for test execution (Prism is 100% stateless).",
+    "Synthetic or ungrounded benchmark evaluation without real workspace compilation checks.",
+    "Modifying or polluting host repository files during test runs (all trial executions are hermetically isolated in /tmp/ sandboxes).",
+    "Heavy web framework or Electron UI packaging in core binaries."
+  ],
+  "api_surface": [
+    {
+      "name": "SessionAdapter",
+      "signature": "pub trait SessionAdapter: Send + Sync { fn name(&self) -> &'static str; fn matches_fingerprint(&self, sample: &str) -> bool; fn capabilities(&self) -> AdapterCapabilities; fn parse_stream<'a>(&self, reader: Box<dyn BufRead + 'a>) -> Result<CanonicalTranscript, IngestionError>; }",
+      "description": "Zero-copy streaming parser interface implemented by ClaudeCodeAdapter, AgyAdapter, and CodexAdapter to project raw JSONL lines into CanonicalTranscript.",
+      "error_conditions": [
+        "IngestionError::MalformedJson if a JSON line cannot be deserialized",
+        "IngestionError::UnrecognizedFormat if log sample does not match known provider fingerprint"
+      ]
+    },
+    {
+      "name": "RawMessageAccumulator",
+      "signature": "pub trait RawMessageAccumulator { type Output: Serialize + Send; fn update_raw(&mut self, message: &serde_json::Value); fn finalize(self) -> Self::Output; }",
+      "description": "Single-pass stream accumulator operating on low-level JSON frames (token usage, model metadata, rate limit health).",
+      "error_conditions": [
+        "Handles missing usage or model fields gracefully without panicking"
+      ]
+    },
+    {
+      "name": "EntryAccumulator",
+      "signature": "pub trait EntryAccumulator { type Output: Serialize + Send; fn update(&mut self, entry: &CanonicalTurn); fn finalize(self) -> Self::Output; }",
+      "description": "Single-pass stream accumulator operating on normalized semantic turns (timeline, tool transitions, schema citations, self-corrections).",
+      "error_conditions": [
+        "Handles out-of-order timestamps by sorting during finalization"
+      ]
+    },
+    {
+      "name": "TrajectoryGraph",
+      "signature": "pub struct TrajectoryGraph { graph: petgraph::graph::DiGraph<ToolNode, CompactString>, last_node: Option<petgraph::graph::NodeIndex> }; impl TrajectoryGraph { pub fn new() -> Self; pub fn push_tool(&mut self, node: ToolNode) -> petgraph::graph::NodeIndex; pub fn detect_circular_loops(&self) -> Vec<CircularLoopAnomaly>; pub fn calculate_efficiency(&self) -> f32; }",
+      "description": "Petgraph-backed Trajectory DAG modeling sequential tool invocations and detecting circular exploration loops via Tarjan Strongly Connected Components.",
+      "error_conditions": [
+        "Emits CircularLoopAnomaly if cycle depth >= 3 and state mutations == 0"
+      ]
+    },
+    {
+      "name": "Grader",
+      "signature": "pub trait Grader: Send + Sync { fn name(&self) -> &'static str; fn evaluate(&self, spec: &TaskSpec, transcript: &CanonicalTranscript) -> Result<AssertionResult, EvaluationError>; }",
+      "description": "Deterministic evaluation assertion interface implemented by RedGreenGrader, TrajectoryGrader, CircuitBreakerGrader, and RubricJudge.",
+      "error_conditions": [
+        "EvaluationError::TaskRunnerFailed if just test or cargo test execution fails",
+        "EvaluationError::Timeout if task evaluation exceeds configured timeout_seconds"
+      ]
+    },
+    {
+      "name": "ExecutionDriver",
+      "signature": "pub trait ExecutionDriver: Send + Sync { fn name(&self) -> &'static str; fn is_available(&self) -> bool; async fn execute(&self, task: &TaskSpec, sandbox_dir: &std::path::Path) -> Result<CanonicalTranscript, ExecutionError>; }",
+      "description": "Decoupled trial runner interface implemented by ClaudeCliDriver, AgyCliDriver, AnthropicApiDriver, and VcrReplayDriver.",
+      "error_conditions": [
+        "ExecutionError::DriverUnavailable if required CLI binary or API key is not found",
+        "ExecutionError::ProcessFailed if subprocess exits with non-zero error status",
+        "ExecutionError::CassetteNotFound if VCR replay requested but cassette is missing"
+      ]
+    },
+    {
+      "name": "WorkspaceSandbox",
+      "signature": "pub struct WorkspaceSandbox { temp_dir: tempfile::TempDir, pub path: std::path::PathBuf }; impl WorkspaceSandbox { pub fn new(fixture_path: &std::path::Path) -> Result<Self, std::io::Error>; pub async fn git_checkout(&self, commit_sha: &str) -> Result<(), std::io::Error>; pub async fn apply_patch(&self, patch: &str) -> Result<(), std::io::Error>; pub async fn run_test_suite(&self) -> Result<bool, std::io::Error>; }",
+      "description": "Hermetic file sandbox creating isolated /tmp/ workspace clones with ephemeral git repositories for test trial execution.",
+      "error_conditions": [
+        "std::io::Error if disk space is exhausted or fixture copying fails",
+        "Fails if patch application fails due to conflict"
+      ]
+    },
+    {
+      "name": "TokenUsageAccumulator",
+      "signature": "pub struct TokenUsageAccumulator { pub input_tokens: u64, pub output_tokens: u64, pub cache_creation_tokens: u64, pub cache_read_tokens: u64, pub turns: u64 }; impl TokenUsageAccumulator { pub fn update_raw(&mut self, message: &serde_json::Value); pub fn finalize(self) -> TokenEconomics; }",
+      "description": "Mathematical token accountant calculating exact USD costs, cache hit ratios, baseline costs, and financial efficiency multipliers.",
+      "error_conditions": [
+        "Silently ignores <synthetic> model tags from internal proxy layers"
+      ]
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "CRIT-PRISM-001",
+      "criterion": "WHEN a valid JSONL session file is parsed by lumen-session, THE SYSTEM SHALL project all messages into a CanonicalTranscript with turn indices, tool intents, and token usage in under 50ms per 10MB.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-002",
+      "criterion": "WHEN computing prompt token economics for Claude 3.5 Sonnet, THE SYSTEM SHALL bill uncached input at $3.00/M, cache writes at $3.75/M, cache reads at $0.30/M, and outputs at $15.00/M.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-003",
+      "criterion": "WHEN calculating the prompt cache hit ratio H, THE SYSTEM SHALL compute H = sum(cache_read) / sum(uncached_input + cache_creation + cache_read) * 100.0.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-004",
+      "criterion": "IF a trial execution exhibits a prompt cache hit ratio below 0.90 (90%), THE SYSTEM SHALL mark the Cache Health assertion as FAILED in eval-report@1.json.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-005",
+      "criterion": "WHEN merging pre-compaction snapshots with final transcripts, THE SYSTEM SHALL take the maximum value for each cumulative token metric rather than the sum.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-006",
+      "criterion": "WHEN building the TrajectoryGraph, THE SYSTEM SHALL run Tarjan Strongly Connected Components to identify tool cycles and flag any cycle of depth >= 3 without mutations as a CircularExplorationLoop anomaly.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-007",
+      "criterion": "IF a CircularExplorationLoop anomaly is detected in the transcript, THE SYSTEM SHALL mark the Trajectory Integrity assertion as FAILED in eval-report@1.json.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-008",
+      "criterion": "WHEN evaluating multi-agent review interactions (e.g. Drafter and Auditor), THE SYSTEM SHALL count review cycles and verify that consensus is reached in <= 2 rounds.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-009",
+      "criterion": "IF multi-agent review iterations exceed 2 rounds, THE SYSTEM SHALL emit a CircuitBreakerStall error and fail the Multi-Agent Circuit assertion.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-010",
+      "criterion": "WHEN executing a deterministic SWE-bench evaluation task, THE SYSTEM SHALL assert that the initial test runner execution FAILS before patch application and PASSES with zero regressions after patch application.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-011",
+      "criterion": "IF a test suite passes prior to patch application in a Red-to-Green task, THE SYSTEM SHALL fail the test with an InvalidRedState error.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-012",
+      "criterion": "WHEN verifying spec@1 schema artifacts, THE SYSTEM SHALL assert that every acceptance criterion follows formal EARS syntax and that all referenced structs match live AST definitions.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-013",
+      "criterion": "IF a spec@1 artifact references a function or struct not found in the target codebase, THE SYSTEM SHALL mark the AST Grounding assertion as FAILED.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-014",
+      "criterion": "WHEN executed with --offline, THE SYSTEM SHALL evaluate tasks by matching SHA-256 prompt hashes against VCR cassettes and returning frozen results in under 5ms with $0.00 network spend.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-015",
+      "criterion": "IF an offline evaluation task cannot find a matching cassette file in cassettes_dir, THE SYSTEM SHALL return a MissingCassetteError with remediation instructions.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-016",
+      "criterion": "WHEN ClaudeCliDriver is selected, THE SYSTEM SHALL spawn the local claude binary using -p and --output-format=json in non-interactive mode without requiring an API key.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-017",
+      "criterion": "IF neither a local CLI binary nor a cloud API key is found in the environment, THE SYSTEM SHALL exit with code 2 and render a miette diagnostic card explaining how to configure drivers.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-018",
+      "criterion": "WHEN executing an evaluation task, THE SYSTEM SHALL create an isolated /tmp/ sandbox and delete the temporary directory upon completion without mutating the host workspace.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-019",
+      "criterion": "WHEN parallel directory scans are executed via lumen scan, THE SYSTEM SHALL utilize rayon and memmap2 to parse session files across available CPU cores.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-020",
+      "criterion": "WHEN generating evaluation reports, THE SYSTEM SHALL format output in strict accordance with the eval-report@1 JSON schema.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-021",
+      "criterion": "WHEN executed in GitHub Actions with --github-summary, THE SYSTEM SHALL write a clean, formatted Markdown scorecard directly to the GITHUB_STEP_SUMMARY environment file.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-022",
+      "criterion": "IF a session log contains corrupted, truncated, or non-UTF8 lines, THE SYSTEM SHALL skip the invalid line, log a structured warning, and continue parsing remaining lines.",
+      "is_error_case": true,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-023",
+      "criterion": "WHEN prism bench --skill=<SKILL> is invoked, THE SYSTEM SHALL execute paired trials comparing the skill-augmented agent against a raw baseline LLM and calculate the delta in pass rate, tokens, and cost.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-024",
+      "criterion": "WHEN prism record --task=<TASK> is invoked, THE SYSTEM SHALL execute a live completion, strip dynamic timestamps and request IDs, and save the normalized cassette to tests/cassettes/.",
+      "is_error_case": false,
+      "judgment_call": false
+    },
+    {
+      "id": "CRIT-PRISM-025",
+      "criterion": "WHEN calculating the Trajectory Efficiency Index E, THE SYSTEM SHALL compute E = (State Mutations + Targeted Reads Leading to Mutations) / Total Invocations.",
+      "is_error_case": false,
+      "judgment_call": false
+    }
+  ],
+  "linked_requirement": "REQ-PRISM-001",
+  "linked_research": "RES-PRISM-001",
+  "spec_file_path": "specs/SPEC-PRISM-001.json",
+  "reasoning": "Synthesizes the 6,366-line Lumen specification, 2025/2026 academic and industry evaluation benchmarks (PRMs, SWE-bench Pro, Trajectory DAGs, MASEval), Anthropic prompt caching mechanics, and Callisto crate layer standards into a single, comprehensive, testable specification."
+}

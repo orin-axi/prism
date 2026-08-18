@@ -1,0 +1,58 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/prism-core",
+    "crates/prism-grader",
+    "crates/prism-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Gabriel Castro (Orin DX)"]
+license = "FSL-1.1-MIT"
+repository = "https://github.com/orin-dx/prism"
+
+[workspace.dependencies]
+# Sibling Lumen workspace dependencies
+lumen-model = { path = "../lumen/crates/lumen-model" }
+lumen-session = { path = "../lumen/crates/lumen-session" }
+lumen-analysis = { path = "../lumen/crates/lumen-analysis" }
+lumen-pattern = { path = "../lumen/crates/lumen-pattern" }
+
+# Prism workspace dependencies
+prism-core = { path = "crates/prism-core" }
+prism-grader = { path = "crates/prism-grader" }
+
+# Data structures & serialization
+compact_str = { version = "0.8", features = ["serde"] }
+smallvec = { version = "1.13", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+# Graph & pattern
+petgraph = "0.6"
+
+# Error handling & CLI
+thiserror = "2.0"
+miette = { version = "7.4", features = ["fancy"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+comfy-table = "7.1"
+anstream = "0.6"
+anstyle = "1.0"
+indicatif = "0.17"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async runtime & HTTP client
+tokio = { version = "1.40", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+async-trait = "0.1"
+tempfile = "3.13"
+which = "6.0"
+toml = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+jsonschema = "0.28"

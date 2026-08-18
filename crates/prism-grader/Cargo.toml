@@ -1,0 +1,22 @@
+[package]
+name = "prism-grader"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license = "FSL-1.1-MIT"
+description = "Deterministic Red-to-Green, Trajectory, Circuit, and Calibrated Rubric evaluation engines for Prism"
+
+[dependencies]
+prism-core = { workspace = true }
+lumen-model = { workspace = true }
+lumen-session = { workspace = true }
+lumen-pattern = { workspace = true }
+compact_str = { workspace = true }
+smallvec = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+jsonschema = { workspace = true }

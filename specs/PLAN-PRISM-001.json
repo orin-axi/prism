@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plan@1",
+  "goal": "Implement the Prism evaluation and quality gating platform and Lumen session intelligence engine across 6 modular Rust workspace crates.",
+  "architecture": "Implements a layered safe Rust monorepo starting from Layer 1 permissive primitives (lumen-model) through zero-copy streaming ingestion (lumen-session), 22 single-pass accumulators and petgraph Trajectory DAG analysis (lumen-analysis, lumen-pattern), and decoupled 4-engine evaluation suites with VCR replay (prism-core, prism-grader), exposed via standalone pre-compiled CLI binaries.",
+  "tech_stack": [
+    "Rust 1.80+",
+    "simd-json",
+    "rayon",
+    "memmap2",
+    "petgraph",
+    "compact_str",
+    "smallvec",
+    "clap",
+    "miette",
+    "reqwest",
+    "tokio",
+    "tempfile",
+    "serde_json",
+    "jsonschema"
+  ],
+  "batches": [
+    {
+      "batch_id": "BATCH-01",
+      "title": "Layer 1: Canonical Domain Primitives & Pricing",
+      "target_crate": "lumen-model",
+      "task_ids": ["TASK-001", "TASK-002"]
+    },
+    {
+      "batch_id": "BATCH-02",
+      "title": "Layer 1.5: Multi-Orchestrator Ingestion & SIMD Parser",
+      "target_crate": "lumen-session",
+      "task_ids": ["TASK-003", "TASK-004"]
+    },
+    {
+      "batch_id": "BATCH-03",
+      "title": "Layer 2: 22 Accumulators & Trajectory DAG Graph Engine",
+      "target_crate": "lumen-analysis",
+      "task_ids": ["TASK-005", "TASK-006", "TASK-007"]
+    },
+    {
+      "batch_id": "BATCH-04",
+      "title": "Layer 3: Evaluation Core, VCR Cassettes & The 4 Graders",
+      "target_crate": "prism-grader",
+      "task_ids": ["TASK-008", "TASK-009", "TASK-010"]
+    },
+    {
+      "batch_id": "BATCH-05",
+      "title": "Layer 4: Standalone CLIs, Config & GitHub Actions CI",
+      "target_crate": "prism-cli",
+      "task_ids": ["TASK-011", "TASK-012"]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Implement Canonical IR, Turn, ToolIntent, and Timing Models",
+      "files": {
+        "create": [
+          "crates/lumen-model/Cargo.toml",
+          "crates/lumen-model/src/lib.rs",
+          "crates/lumen-model/src/transcript.rs",
+          "crates/lumen-model/src/turn.rs"
+        ],
+        "modify": ["Cargo.toml"],
+        "test": ["crates/lumen-model/tests/test_transcript.rs"]
+      },
+      "steps": [
+        "1. Define Root workspace Cargo.toml with resolver = '2' and workspace members.",
+        "2. Implement CanonicalTranscript, CanonicalTurn, ToolIntent, and TurnRole with compact_str and smallvec in crates/lumen-model/src/transcript.rs.",
+        "3. Write unit tests in crates/lumen-model/tests/test_transcript.rs verifying serialization roundtrips.",
+        "4. Run `cargo test -p lumen-model` and confirm GREEN."
+      ],
+      "commit_message": "feat(lumen-model): define canonical transcript, turn, and tool intent primitives",
+      "covers_criteria": ["CRIT-PRISM-001"]
+    },
+    {
+      "id": "TASK-002",
+      "title": "Implement Exact Mathematical Token Economics and Model Pricing Matrix",
+      "files": {
+        "create": [
+          "crates/lumen-model/src/pricing.rs",
+          "crates/lumen-model/src/economics.rs"
+        ],
+        "modify": ["crates/lumen-model/src/lib.rs"],
+        "test": ["crates/lumen-model/tests/test_pricing.rs"]
+      },
+      "steps": [
+        "1. Implement ModelPricing struct with 4-tier rates (input_base, cache_write 1.25x, cache_read 0.10x, output) for Sonnet, Haiku, Opus, GPT-4o, and DeepSeek.",
+        "2. Implement TokenEconomics calculation for cache_hit_ratio, baseline_cost_no_cache_usd, and financial efficiency_multiplier.",
+        "3. Write tests in crates/lumen-model/tests/test_pricing.rs verifying billing math against official Anthropic rates.",
+        "4. Run `cargo test -p lumen-model` and confirm GREEN."
+      ],
+      "commit_message": "feat(lumen-model): implement prompt cache pricing matrix and economics calculations",
+      "covers_criteria": ["CRIT-PRISM-002", "CRIT-PRISM-003"]
+    },
+    {
+      "id": "TASK-003",
+      "title": "Implement SessionAdapter Trait and Auto-Fingerprint Ingestion Engine",
+      "files": {
+        "create": [
+          "crates/lumen-session/Cargo.toml",
+          "crates/lumen-session/src/lib.rs",
+          "crates/lumen-session/src/adapter.rs",
+          "crates/lumen-session/src/fingerprint.rs"
+        ],
+        "modify": ["Cargo.toml"],
+        "test": ["crates/lumen-session/tests/test_fingerprint.rs"]
+      },
+      "steps": [
+        "1. Define SessionAdapter and AdapterCapabilities traits in crates/lumen-session/src/adapter.rs.",
+        "2. Implement fast sub-millisecond fingerprint detector inspecting first 2KB of log bytes.",
+        "3. Write unit tests in crates/lumen-session/tests/test_fingerprint.rs verifying detection of Claude Code, AGY, and Codex logs.",
+        "4. Run `cargo test -p lumen-session` and confirm GREEN."
+      ],
+      "commit_message": "feat(lumen-session): implement SessionAdapter trait and orchestrator fingerprinting",
+      "covers_criteria": ["CRIT-PRISM-001", "CRIT-PRISM-022"]
+    },
+    {
+      "id": "TASK-004",
+      "title": "Implement SIMD-Accelerated ClaudeCodeAdapter and PreCompact Snapshot Merging",
+      "files": {
+        "create": [
+          "crates/lumen-session/src/adapters/claude.rs",
+          "crates/lumen-session/src/snapshot.rs"
+        ],
+        "modify": ["crates/lumen-session/src/lib.rs"],
+        "test": ["crates/lumen-session/tests/test_claude_adapter.rs"]
+      },
+      "steps": [
+        "1. Implement ClaudeCodeAdapter using simd-json and memory-mapped reader.",
+        "2. Implement PreCompact snapshot merge taking max() over cumulative tokens.",
+        "3. Write test verifying handling of corrupt lines and non-destructive snapshot merging.",
+        "4. Run `cargo test -p lumen-session` and confirm GREEN."
+      ],
+      "commit_message": "feat(lumen-session): implement simd-json Claude adapter and pre-compact snapshot merge",
+      "covers_criteria": ["CRIT-PRISM-001", "CRIT-PRISM-005", "CRIT-PRISM-022"]
+    },
+    {
+      "id": "TASK-005",
+      "title": "Implement the 22 Single-Pass Streaming Accumulators",
+      "files": {
+        "create": [
+          "crates/lumen-analysis/Cargo.toml",
+          "crates/lumen-analysis/src/lib.rs",
+          "crates/lumen-analysis/src/accumulators.rs",
+          "crates/lumen-analysis/src/token_usage.rs",
+          "crates/lumen-analysis/src/circuit_breaker.rs"
+        ],
+        "modify": ["Cargo.toml"],
+        "test": ["crates/lumen-analysis/tests/test_accumulators.rs"]
+      },
+      "steps": [
+        "1. Implement RawMessageAccumulator and EntryAccumulator traits.",
+        "2. Implement the 22 accumulators (token_usage, circuit_breaker, mcp_affinity, flow, turn_duration, etc.).",
+        "3. Write tests verifying single-pass O(N) extraction with 0 heap allocations in inner loop.",
+        "4. Run `cargo test -p lumen-analysis` and confirm GREEN."
+      ],
+      "commit_message": "feat(lumen-analysis): implement 22 single-pass streaming accumulators",
+      "covers_criteria": ["CRIT-PRISM-001", "CRIT-PRISM-008", "CRIT-PRISM-009"]
+    },
+    {
+      "id": "TASK-006",
+      "title": "Implement TrajectoryGraph and Tarjan SCC Cycle Detection Engine",
+      "files": {
+        "create": [
+          "crates/lumen-pattern/Cargo.toml",
+          "crates/lumen-pattern/src/lib.rs",
+          "crates/lumen-pattern/src/graph.rs",
+          "crates/lumen-pattern/src/scc.rs"
+        ],
+        "modify": ["Cargo.toml"],
+        "test": ["crates/lumen-pattern/tests/test_trajectory_loops.rs"]
+      },
+      "steps": [
+        "1. Implement TrajectoryGraph using petgraph::graph::DiGraph with ToolNode elements.",
+        "2. Implement Tarjan SCC cycle detector identifying exploration loops of depth >= 3 without state mutations.",
+        "3. Implement Trajectory Efficiency Index calculation E = (Mutations + Targeted Reads) / Invocations.",
+        "4. Write tests verifying circular loop detection on real agent search traces.",
+        "5. Run `cargo test -p lumen-pattern` and confirm GREEN."
+      ],
+      "commit_message": "feat(lumen-pattern): implement petgraph Trajectory DAG and Tarjan SCC cycle detector",
+      "covers_criteria": ["CRIT-PRISM-006", "CRIT-PRISM-007", "CRIT-PRISM-025"]
+    },
+    {
+      "id": "TASK-007",
+      "title": "Implement Multi-Session Parallel Directory Scanner using Rayon and Memmap2",
+      "files": {
+        "create": [
+          "crates/lumen-analysis/src/scanner.rs",
+          "crates/lumen-analysis/src/summary.rs"
+        ],
+        "modify": ["crates/lumen-analysis/src/lib.rs"],
+        "test": ["crates/lumen-analysis/tests/test_parallel_scan.rs"]
+      },
+      "steps": [
+        "1. Implement parallel_scan_sessions using rayon par_iter and memmap2.",
+        "2. Parse multi-session directory trees into aggregated summaries in parallel.",
+        "3. Write integration test scanning 50 mock session logs in under 100ms.",
+        "4. Run `cargo test -p lumen-analysis` and confirm GREEN."
+      ],
+      "commit_message": "feat(lumen-analysis): implement rayon parallel multi-session scanner",
+      "covers_criteria": ["CRIT-PRISM-019"]
+    },
+    {
+      "id": "TASK-008",
+      "title": "Implement TaskSpec, Scorecard, VCR Cassettes, and Hermetic Sandbox",
+      "files": {
+        "create": [
+          "crates/prism-core/Cargo.toml",
+          "crates/prism-core/src/lib.rs",
+          "crates/prism-core/src/task.rs",
+          "crates/prism-core/src/vcr.rs",
+          "crates/prism-core/src/sandbox.rs"
+        ],
+        "modify": ["Cargo.toml"],
+        "test": ["crates/prism-core/tests/test_sandbox_vcr.rs"]
+      },
+      "steps": [
+        "1. Define TaskSpec, Scorecard, and VcrCassette domain types.",
+        "2. Implement WorkspaceSandbox creating hermetic /tmp/ git worktrees.",
+        "3. Implement VcrCassetteStore with deterministic SHA-256 prompt hashing and replay.",
+        "4. Write tests verifying sandbox isolation and sub-5ms cassette replay.",
+        "5. Run `cargo test -p prism-core` and confirm GREEN."
+      ],
+      "commit_message": "feat(prism-core): implement TaskSpec, VCR cassette store, and hermetic sandbox",
+      "covers_criteria": ["CRIT-PRISM-014", "CRIT-PRISM-015", "CRIT-PRISM-018", "CRIT-PRISM-024"]
+    },
+    {
+      "id": "TASK-009",
+      "title": "Implement Dual-Mode Execution Drivers (Local CLI, Direct API, and VCR Replay)",
+      "files": {
+        "create": [
+          "crates/prism-core/src/driver.rs",
+          "crates/prism-core/src/drivers/local_cli.rs",
+          "crates/prism-core/src/drivers/api.rs",
+          "crates/prism-core/src/drivers/vcr.rs"
+        ],
+        "modify": ["crates/prism-core/src/lib.rs"],
+        "test": ["crates/prism-core/tests/test_drivers.rs"]
+      },
+      "steps": [
+        "1. Implement ExecutionDriver trait.",
+        "2. Implement ClaudeCliDriver and AgyCliDriver spawning local CLI in non-interactive mode.",
+        "3. Implement AnthropicApiDriver using reqwest with prompt caching headers.",
+        "4. Implement VcrReplayDriver reading frozen cassettes.",
+        "5. Write unit tests in crates/prism-core/tests/test_drivers.rs.",
+        "6. Run `cargo test -p prism-core` and confirm GREEN."
+      ],
+      "commit_message": "feat(prism-core): implement dual-mode execution drivers for CLI, API, and VCR",
+      "covers_criteria": ["CRIT-PRISM-016", "CRIT-PRISM-017"]
+    },
+    {
+      "id": "TASK-010",
+      "title": "Implement the 4 Evaluation Grader Engines and eval-report@1 Generator",
+      "files": {
+        "create": [
+          "crates/prism-grader/Cargo.toml",
+          "crates/prism-grader/src/lib.rs",
+          "crates/prism-grader/src/red_green.rs",
+          "crates/prism-grader/src/trajectory.rs",
+          "crates/prism-grader/src/circuit.rs",
+          "crates/prism-grader/src/judge.rs",
+          "crates/prism-grader/src/report.rs"
+        ],
+        "modify": ["Cargo.toml"],
+        "test": ["crates/prism-grader/tests/test_graders.rs"]
+      },
+      "steps": [
+        "1. Implement RedGreenGrader verifying SWE-bench style state transitions.",
+        "2. Implement TrajectoryGrader asserting cache hit >= 90% and zero circular loops.",
+        "3. Implement CircuitBreakerGrader asserting <= 2 review rounds.",
+        "4. Implement CalibratedJudge evaluating formative G-Eval rubrics with Opus.",
+        "5. Implement report generation conforming strictly to eval-report@1 schema.",
+        "6. Run `cargo test -p prism-grader` and confirm GREEN."
+      ],
+      "commit_message": "feat(prism-grader): implement the 4 evaluation graders and eval-report@1 generator",
+      "covers_criteria": [
+        "CRIT-PRISM-004",
+        "CRIT-PRISM-007",
+        "CRIT-PRISM-009",
+        "CRIT-PRISM-010",
+        "CRIT-PRISM-011",
+        "CRIT-PRISM-012",
+        "CRIT-PRISM-013",
+        "CRIT-PRISM-020"
+      ]
+    },
+    {
+      "id": "TASK-011",
+      "title": "Implement prism-cli (test, bench, rebuild, record) and TOML Configuration",
+      "files": {
+        "create": [
+          "crates/prism-cli/Cargo.toml",
+          "crates/prism-cli/src/main.rs",
+          "crates/prism-cli/src/config.rs",
+          "crates/prism-cli/src/commands/test.rs",
+          "crates/prism-cli/src/commands/bench.rs",
+          "crates/prism-cli/src/commands/rebuild.rs",
+          "crates/prism-cli/src/commands/record.rs"
+        ],
+        "modify": ["Cargo.toml"],
+        "test": ["crates/prism-cli/tests/test_cli_commands.rs"]
+      },
+      "steps": [
+        "1. Define clap CLI commands and miette diagnostic error formatting.",
+        "2. Implement PrismConfig loading from prism.toml with environment and flag overrides.",
+        "3. Implement prism test, prism bench --skill, prism rebuild, and prism record subcommands.",
+        "4. Write CLI integration tests in crates/prism-cli/tests/test_cli_commands.rs.",
+        "5. Run `cargo test -p prism-cli` and confirm GREEN."
+      ],
+      "commit_message": "feat(prism-cli): implement standalone evaluation binary and TOML config parser",
+      "covers_criteria": ["CRIT-PRISM-020", "CRIT-PRISM-021", "CRIT-PRISM-023", "CRIT-PRISM-024"]
+    },
+    {
+      "id": "TASK-012",
+      "title": "Implement lumen-cli (trace, audit, scan, insights) and Terminal Visualizer",
+      "files": {
+        "create": [
+          "crates/lumen-cli/Cargo.toml",
+          "crates/lumen-cli/src/main.rs",
+          "crates/lumen-cli/src/commands/trace.rs",
+          "crates/lumen-cli/src/commands/audit.rs",
+          "crates/lumen-cli/src/commands/scan.rs",
+          "crates/lumen-cli/src/commands/insights.rs"
+        ],
+        "modify": ["Cargo.toml"],
+        "test": ["crates/lumen-cli/tests/test_lumen_cli.rs"]
+      },
+      "steps": [
+        "1. Implement lumen trace rendering ASCII trajectory DAG timeline.",
+        "2. Implement lumen audit displaying token spend and prompt cache hit percentage.",
+        "3. Implement lumen scan running parallel multi-session summaries.",
+        "4. Write tests in crates/lumen-cli/tests/test_lumen_cli.rs.",
+        "5. Run `cargo test -p lumen-cli` and confirm GREEN."
+      ],
+      "commit_message": "feat(lumen-cli): implement standalone telemetry and audit visualization binary",
+      "covers_criteria": ["CRIT-PRISM-001", "CRIT-PRISM-002", "CRIT-PRISM-019"]
+    }
+  ],
+  "linked_spec": "SPEC-PRISM-001",
+  "spec_file_path": "specs/SPEC-PRISM-001.json",
+  "spec_hash": "sha256:d8a9f24c3e80b15cf4a1e9447d95b5468798939c01740fa39247ea7e9f5e3240",
+  "linked_requirement": "REQ-PRISM-001",
+  "reasoning": "Breaks down SPEC-PRISM-001 into 5 sequential compilation batches and 12 granular, TDD-first tasks covering 100% of acceptance criteria."
+}
