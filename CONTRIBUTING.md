@@ -1,6 +1,6 @@
 # Contributing to Prism
 
-Contributions to Prism are welcome. This guide outlines the development environment setup, architectural invariants, and testing standards.
+Contributions to Prism are welcome. This guide outlines the development environment setup, architectural invariants, and testing standards. By participating you agree to abide by the [Code of Conduct](./CODE_OF_CONDUCT.md); found a security issue? See [SECURITY.md](./SECURITY.md) instead of opening a public issue.
 
 ---
 
