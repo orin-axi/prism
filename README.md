@@ -9,7 +9,7 @@
 [![Rust: 1.80+](https://img.shields.io/badge/Rust-1.80+-orange.svg)](https://www.rust-lang.org)
 [![MSRV: 1.80](https://img.shields.io/badge/MSRV-1.80-brightgreen.svg)](https://github.com/orin-axi/prism)
 
-[Overview](#overview) • [Pipeline](#evaluation-pipeline) • [The 8 Evaluated Dimensions](#the-8-evaluated-dimensions) • [The 4 Graders](#the-4-graders) • [Installation](#installation) • [CLI Reference](#cli-reference) • [Matrix Experiments](#declarative-matrix-experiments) • [CI Integration](#github-actions-ci-integration)
+[Overview](#overview) • [Pipeline](#evaluation-pipeline) • [The 8 Evaluated Dimensions](#the-8-evaluated-dimensions) • [The 4 Graders](#the-4-graders) • [Installation](#installation) • [CLI Reference](#cli-reference) • [Matrix Experiments](#declarative-matrix-experiments) • [CI Integration](#github-actions-ci-integration) • [Documentation](#documentation)
 
 </div>
 
@@ -285,6 +285,21 @@ jobs:
       - name: Run Quality Gate
         run: prism test --suite=suites/regression.json --github-summary
 ```
+
+---
+
+## Documentation
+
+| Document | Covers |
+| :--- | :--- |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Crate hierarchy, evaluation dataflow, grader engines |
+| [`docs/SPECIFICATION.md`](./docs/SPECIFICATION.md) | Full Prism & Lumen architecture specification (`SPEC-PRISM-001`) |
+| [`docs/01-core-evaluation-and-vcr-cassettes.md`](./docs/01-core-evaluation-and-vcr-cassettes.md) | Domain models, execution drivers, VCR cassettes, hermetic sandboxing |
+| [`docs/02-the-four-grader-engines.md`](./docs/02-the-four-grader-engines.md) | The `Grader` trait and the 4 decoupled grading engines |
+| [`docs/03-prism-cli-toml-and-ci.md`](./docs/03-prism-cli-toml-and-ci.md) | CLI commands, `prism.toml` schema, GitHub Actions workflows |
+| [`docs/04-multi-dimensional-matrix-and-differentials.md`](./docs/04-multi-dimensional-matrix-and-differentials.md) | The 8 empirical dimensions and same-vs-same differentials |
+| [`docs/05-lumen-integration-and-closed-loop-flywheel.md`](./docs/05-lumen-integration-and-closed-loop-flywheel.md) | Lumen primitive reuse and the closed-loop developer flywheel |
+| [`docs/06-wisp-briefing-evaluation.md`](./docs/06-wisp-briefing-evaluation.md) | Two-tier evaluation of Wisp context briefings: intrinsic scoring and extrinsic paired runs |
 
 ---
 
